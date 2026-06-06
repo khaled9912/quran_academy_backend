@@ -5,12 +5,15 @@ create extension if not exists "pgcrypto";
 
 -- Profiles (users)
 create table if not exists profiles (
-  id uuid primary key default gen_random_uuid(),
+  id uuid primary key,
   email text not null unique,
+  first_name text,
+  last_name text,
   full_name text,
-  role text not null check (role in ('admin','teacher','student','parent')) default 'student',
+  role text not null check (role in ('super_admin','admin','teacher','student')) default 'student',
   phone text,
   avatar_url text,
+  is_active boolean default true,
   created_at timestamptz default now()
 );
 
@@ -152,10 +155,17 @@ create table if not exists contact_messages (
   created_at timestamptz default now()
 );
 
--- Enable Row Level Security and add example policies
--- NOTE: Policies below are examples; review and tighten them to your needs.
+-- Audit logs (Super Admin activity logs)
+create table if not exists audit_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references profiles(id) on delete cascade,
+  action text not null,
+  resource text not null,
+  resource_id uuid,
+  created_at timestamptz default now()
+);
 
--- Enable RLS on relevant tables
+-- Enable Row Level Security
 alter table profiles enable row level security;
 alter table courses enable row level security;
 alter table course_students enable row level security;
@@ -166,88 +176,122 @@ alter table submissions enable row level security;
 alter table evaluations enable row level security;
 alter table invoices enable row level security;
 alter table notifications enable row level security;
+alter table audit_logs enable row level security;
 
 -- Helper: allow authenticated users to insert their profile row
 create policy "Profiles: insert for authenticated" on profiles
   for insert using (auth.uid() IS NOT NULL) with check (auth.uid() IS NOT NULL);
 
-create policy "Profiles: select own or admin" on profiles
-  for select using (auth.uid() = id OR (select role from profiles where id = auth.uid()) = 'admin');
+create policy "Profiles: select own or admin/super_admin" on profiles
+  for select using (
+    auth.uid() = id 
+    OR (select role from profiles where id = auth.uid()) in ('admin', 'super_admin')
+  );
 
-create policy "Profiles: update own or admin" on profiles
-  for update using (auth.uid() = id OR (select role from profiles where id = auth.uid()) = 'admin')
-  with check (auth.uid() = id OR (select role from profiles where id = auth.uid()) = 'admin');
+create policy "Profiles: update own or admin/super_admin" on profiles
+  for update using (
+    auth.uid() = id 
+    OR (select role from profiles where id = auth.uid()) = 'super_admin'
+    OR (
+      (select role from profiles where id = auth.uid()) = 'admin'
+      AND role NOT IN ('super_admin', 'admin') 
+      AND (select role from profiles where id = id) NOT IN ('super_admin', 'admin')
+    )
+  )
+  with check (
+    auth.uid() = id 
+    OR (select role from profiles where id = auth.uid()) = 'super_admin'
+    OR (
+      (select role from profiles where id = auth.uid()) = 'admin'
+      AND role NOT IN ('super_admin', 'admin')
+      AND (select role from profiles where id = id) NOT IN ('super_admin', 'admin')
+    )
+  );
 
--- Courses: admins can do anything; teachers can manage their courses; students can select if enrolled
+create policy "Profiles: delete by super_admin" on profiles
+  for delete using (
+    (select role from profiles where id = auth.uid()) = 'super_admin'
+  );
+
+-- Courses: admins/super_admins can do anything; teachers can manage their courses; students can select if enrolled
 create policy "Courses: select" on courses
   for select using (
-    (select role from profiles where id = auth.uid()) = 'admin'
+    (select role from profiles where id = auth.uid()) in ('admin', 'super_admin')
     OR teacher_id = auth.uid()
     OR exists (select 1 from course_students cs where cs.course_id = courses.id and cs.student_id = auth.uid())
   );
 
-create policy "Courses: insert by teacher or admin" on courses
+create policy "Courses: insert by teacher or admin/super_admin" on courses
   for insert using (
-    (select role from profiles where id = auth.uid()) = 'admin'
+    (select role from profiles where id = auth.uid()) in ('admin', 'super_admin')
     OR (select role from profiles where id = auth.uid()) = 'teacher'
   );
 
-create policy "Courses: update/delete by teacher or admin" on courses
+create policy "Courses: update/delete by teacher or admin/super_admin" on courses
   for update, delete using (
-    (select role from profiles where id = auth.uid()) = 'admin'
+    (select role from profiles where id = auth.uid()) in ('admin', 'super_admin')
     OR teacher_id = auth.uid()
   );
 
 -- Sessions: similar to courses
 create policy "Sessions: select" on sessions
   for select using (
-    (select role from profiles where id = auth.uid()) = 'admin'
+    (select role from profiles where id = auth.uid()) in ('admin', 'super_admin')
     OR teacher_id = auth.uid()
     OR exists (select 1 from course_students cs where cs.course_id = sessions.course_id and cs.student_id = auth.uid())
   );
 
 create policy "Sessions: insert/update/delete" on sessions
   for insert, update, delete using (
-    (select role from profiles where id = auth.uid()) = 'admin'
+    (select role from profiles where id = auth.uid()) in ('admin', 'super_admin')
     OR teacher_id = auth.uid()
   );
 
--- Attendance: teachers for their sessions and students for their own records
+-- Attendance: teachers/admins/super_admins for records; students for own
 create policy "Attendance: select" on attendance
   for select using (
-    (select role from profiles where id = auth.uid()) = 'admin'
-    OR (select role from profiles where id = auth.uid()) = 'teacher'
+    (select role from profiles where id = auth.uid()) in ('admin', 'super_admin', 'teacher')
     OR student_id = auth.uid()
   );
 
-create policy "Attendance: insert/update by teacher or admin" on attendance
+create policy "Attendance: insert/update by teacher or admin/super_admin" on attendance
   for insert, update using (
-    (select role from profiles where id = auth.uid()) = 'admin'
-    OR (select role from profiles where id = auth.uid()) = 'teacher'
+    (select role from profiles where id = auth.uid()) in ('admin', 'super_admin', 'teacher')
   );
 
--- Submissions: students can create their submission; teachers/admin can view
+-- Submissions: students can create their submission; teachers/admin/super_admin can view
 create policy "Submissions: insert by student" on submissions
   for insert using (auth.uid() = student_id);
 
-create policy "Submissions: select by owner/teacher/admin" on submissions
+create policy "Submissions: select by owner/teacher/admin/super_admin" on submissions
   for select using (
     auth.uid() = student_id
-    OR (select role from profiles where id = auth.uid()) = 'admin'
-    OR (select role from profiles where id = auth.uid()) = 'teacher'
+    OR (select role from profiles where id = auth.uid()) in ('admin', 'super_admin', 'teacher')
   );
 
--- Notifications: users can see their notifications; admins can manage
-create policy "Notifications: select/insert/update by owner or admin" on notifications
-  for all using (user_id = auth.uid() OR (select role from profiles where id = auth.uid()) = 'admin');
+-- Notifications: users can see their notifications; admins/super_admins can manage
+create policy "Notifications: select/insert/update by owner or admin/super_admin" on notifications
+  for all using (
+    user_id = auth.uid() 
+    OR (select role from profiles where id = auth.uid()) in ('admin', 'super_admin')
+  );
 
--- Invoices: student sees own, admin can manage
+-- Invoices: student sees own, admin/super_admin can manage
 create policy "Invoices: select" on invoices
-  for select using (student_id = auth.uid() OR (select role from profiles where id = auth.uid()) = 'admin');
+  for select using (
+    student_id = auth.uid() 
+    OR (select role from profiles where id = auth.uid()) in ('admin', 'super_admin')
+  );
 
--- Additional policies (assignments, evaluations, etc.) can be added similarly.
+-- Audit logs: select by super_admin only; insert by authenticated users/system
+create policy "Audit logs: select by super_admin" on audit_logs
+  for select using (
+    (select role from profiles where id = auth.uid()) = 'super_admin'
+  );
 
--- Storage buckets suggested:
--- avatars/, assignments/, submissions/, certificates/, teacher-documents/, recordings/
+create policy "Audit logs: insert by authenticated" on audit_logs
+  for insert with check (
+    auth.uid() IS NOT NULL
+  );
 
 -- End of schema

@@ -13,6 +13,7 @@ import submissionsRouter from "./routes/submissions";
 import evaluationsRouter from "./routes/evaluations";
 import invoicesRouter from "./routes/invoices";
 import notificationsRouter from "./routes/notifications";
+import auditLogsRouter from "./routes/audit-logs";
 
 dotenv.config();
 
@@ -32,6 +33,7 @@ app.use("/api/submissions", submissionsRouter);
 app.use("/api/evaluations", evaluationsRouter);
 app.use("/api/invoices", invoicesRouter);
 app.use("/api/notifications", notificationsRouter);
+app.use("/api/audit-logs", auditLogsRouter);
 
 app.get("/", (req, res) => {
   res.json({ status: "ok", message: "Quran Academy backend is running." });
