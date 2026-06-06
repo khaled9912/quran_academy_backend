@@ -1,5 +1,79 @@
 # Quran Academy Backend
 
+This repository contains the backend for the Quran Academy app, built on Node/Express and Supabase.
+
+Prerequisites
+- Node 18+
+- psql (optional, for direct DB access)
+- supabase CLI (optional, recommended for deploying Edge Functions and storage)
+- A Supabase project (URL and service role key)
+
+Environment
+Create a `.env` file with at least:
+
+```
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_DB_URL=postgres://user:pass@host:port/dbname    # optional for psql scripts
+CLIENT_URL=http://localhost:3000
+PORT=4000
+```
+
+Apply schema
+
+Using psql (recommended if you have a direct DB URL):
+
+```bash
+SUPABASE_DB_URL=postgres://... npm run db:seed # or npm run db:apply to apply schema then seed
+```
+
+Using supabase CLI (project must be set up):
+
+```bash
+supabase db push --schema supabase/schema.sql
+```
+
+Seed data
+
+```bash
+SUPABASE_DB_URL=postgres://... npm run db:seed
+```
+
+Create storage buckets (uses supabase CLI)
+
+```bash
+npm run buckets:create
+```
+
+Edge Functions
+
+Example edge function template is at `supabase/functions/send_notification`.
+Deploy with the supabase CLI:
+
+```bash
+supabase functions deploy send_notification --project-ref your-project-ref
+```
+
+Run locally
+
+```bash
+npm run dev
+```
+
+What I added
+- `supabase/schema.sql` — normalized schema and RLS policies
+- `supabase/seed.sql` — sample data for admin/teacher/student/course
+- `scripts/apply_schema.sh`, `scripts/create_buckets.sh`
+- `supabase/functions/send_notification` — Edge Function template
+- npm scripts: `db:apply`, `db:seed`, `buckets:create`
+
+Next steps (optional):
+- Add CI pipeline to deploy schema and functions
+- Add automated tests calling endpoints
+- Harden RLS policies and test them with service/anon roles
+# Quran Academy Backend
+
 This backend project is built as a lightweight Express API layer that uses Supabase for database storage and authentication.
 
 ## Why this setup

@@ -4,21 +4,16 @@ import { supabase } from "../lib/supabase";
 
 const router = Router();
 
+// List enrollments / course_students
 router.get("/", verifyAuth, async (req, res) => {
   const userId = (req as any).user.id;
-  const { data: profileData, error: profileError } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", userId)
-    .single();
+  const { data: profileData, error: profileError } = await supabase.from("profiles").select("role").eq("id", userId).single();
 
   if (profileError) {
     return res.status(500).json({ error: profileError.message });
   }
 
-  const query = supabase.from("enrollments").select("*").order("enrolled_at", {
-    ascending: false,
-  });
+  const query = supabase.from("course_students").select("*").order("joined_at", { ascending: false });
 
   if (profileData?.role !== "admin") {
     query.eq("student_id", userId);
@@ -29,21 +24,14 @@ router.get("/", verifyAuth, async (req, res) => {
   return res.json(data);
 });
 
+// Join a course
 router.post("/", verifyAuth, async (req, res) => {
   const userId = (req as any).user.id;
-  const { course_id, student_name, course_title } = req.body;
+  const { course_id, student_id } = req.body;
 
-  const payload: any = { status: "active" };
-  if (course_id) payload.course_id = course_id;
-  if (student_name) payload.student_name = student_name;
-  if (course_title) payload.course_title = course_title;
-  if (!payload.student_name) payload.student_id = userId;
+  const payload: any = { course_id: course_id, student_id: student_id || userId };
 
-  const { data, error } = await supabase
-    .from("enrollments")
-    .insert([payload])
-    .select("*");
-
+  const { data, error } = await supabase.from("course_students").insert([payload]).select("*");
   if (error) return res.status(500).json({ error: error.message });
   return res.status(201).json(data?.[0]);
 });

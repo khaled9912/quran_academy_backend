@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "db:apply": "bash scripts/apply_schema.sh",
+    "db:seed": "bash -c \"psql \"$SUPABASE_DB_URL\" -f supabase/seed.sql\"",
+    "buckets:create": "bash scripts/create_buckets.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",

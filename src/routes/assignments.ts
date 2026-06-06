@@ -5,37 +5,34 @@ import { supabase } from "../lib/supabase";
 const router = Router();
 
 router.get("/", async (req, res) => {
-  const { data, error } = await supabase
-    .from("sessions")
-    .select("*")
-    .order("start_time", { ascending: true });
+  const { course_id } = req.query;
+  const query = supabase.from("assignments").select("*").order("created_at", { ascending: false });
+  if (course_id) query.eq("course_id", course_id as string);
+  const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
   return res.json(data);
 });
 
 router.post("/", verifyAuth, async (req, res) => {
-  const { course_id, teacher_id, title, meeting_link, meeting_provider, start_time, end_time, status } = req.body;
   const authId = (req as any).user.id;
-  const payload: any = { course_id, title, meeting_link, meeting_provider, start_time, end_time, status };
-  payload.teacher_id = teacher_id || authId;
-
-  const { data, error } = await supabase.from("sessions").insert([payload]).select("*");
+  const { course_id, title, description, due_date } = req.body;
+  const payload = { course_id, title, description, due_date, created_by: authId };
+  const { data, error } = await supabase.from("assignments").insert([payload]).select("*");
   if (error) return res.status(500).json({ error: error.message });
   return res.status(201).json(data?.[0]);
 });
 
 router.patch("/:id", verifyAuth, async (req, res) => {
-  const sessionId = req.params.id;
+  const id = req.params.id;
   const updates = req.body;
-  const { data, error } = await supabase.from("sessions").update(updates).eq("id", sessionId).select("*");
-
+  const { data, error } = await supabase.from("assignments").update(updates).eq("id", id).select("*");
   if (error) return res.status(500).json({ error: error.message });
   return res.json(data?.[0]);
 });
 
 router.delete("/:id", verifyAuth, async (req, res) => {
-  const sessionId = req.params.id;
-  const { error } = await supabase.from("sessions").delete().eq("id", sessionId);
+  const id = req.params.id;
+  const { error } = await supabase.from("assignments").delete().eq("id", id);
   if (error) return res.status(500).json({ error: error.message });
   return res.status(204).send();
 });

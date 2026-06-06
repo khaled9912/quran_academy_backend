@@ -7,6 +7,12 @@ import sessionsRouter from "./routes/sessions";
 import attendanceRouter from "./routes/attendance";
 import contactRouter from "./routes/contact";
 import teachersRouter from "./routes/teachers";
+import profilesRouter from "./routes/profiles";
+import assignmentsRouter from "./routes/assignments";
+import submissionsRouter from "./routes/submissions";
+import evaluationsRouter from "./routes/evaluations";
+import invoicesRouter from "./routes/invoices";
+import notificationsRouter from "./routes/notifications";
 
 dotenv.config();
 
@@ -20,6 +26,12 @@ app.use("/api/sessions", sessionsRouter);
 app.use("/api/attendance", attendanceRouter);
 app.use("/api/contact", contactRouter);
 app.use("/api/teachers", teachersRouter);
+app.use("/api/profiles", profilesRouter);
+app.use("/api/assignments", assignmentsRouter);
+app.use("/api/submissions", submissionsRouter);
+app.use("/api/evaluations", evaluationsRouter);
+app.use("/api/invoices", invoicesRouter);
+app.use("/api/notifications", notificationsRouter);
 
 app.get("/", (req, res) => {
   res.json({ status: "ok", message: "Quran Academy backend is running." });
